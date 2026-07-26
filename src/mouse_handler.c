@@ -44,7 +44,12 @@ static MOUSE_HANDLER(mouse_handler)
         event_loop_post(&g_event_loop, MOUSE_UP, (void *) CFRetain(event), 0);
 
         if (mouse_state->consume_mouse_click) {
-            if (!mouse_state->drag_detected) {
+            // LOCAL PATCH: `mouse_replay_click off` suppresses the replay.
+            // The replay exists so that modifier+click still acts as a click
+            // when no drag followed. With a hyper key as the modifier there is
+            // no such gesture to preserve, and replaying turns every hyper
+            // chord held past the trigger threshold into a stray click.
+            if (!mouse_state->drag_detected && !mouse_state->no_replay_click) {
                 CGEventTapPostEvent(proxy, mouse_state->consumed_event);
                 CGEventTapPostEvent(proxy, event);
             }

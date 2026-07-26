@@ -92,5 +92,64 @@ Not part of this repo, but this patch is useless without them:
 `src/mouse_handler.c` replays the swallowed click if no drag is detected between
 mouse-down and mouse-up. So holding the trigger past the Karabiner threshold and
 releasing *without moving the mouse* delivers a real click wherever the pointer
-sits. Unrelated to this patch, but it is the behaviour that makes threshold
-choice matter.
+sits. Addressed by patch 2 below.
+
+---
+
+## 2. `mouse_replay_click` — suppress the replayed click
+
+**Commit:** "add `mouse_replay_click` to suppress the replayed click"
+
+**Files:** `src/mouse_handler.h`, `src/mouse_handler.c`, `src/message.c`, `doc/yabai.asciidoc`
+
+### What it does
+
+```bash
+yabai -m config mouse_replay_click off
+```
+
+Stops yabai from replaying a consumed `mouse_modifier`+click into the application
+when no drag followed.
+
+### Why
+
+Upstream, `mouse_handler()` swallows the mouse-down when the modifier matches, then
+on mouse-up:
+
+```c
+if (mouse_state->consume_mouse_click) {
+    if (!mouse_state->drag_detected) {
+        CGEventTapPostEvent(proxy, mouse_state->consumed_event);   // replay
+        CGEventTapPostEvent(proxy, event);
+    }
+```
+
+That is correct for a normal modifier: `alt`+click should still click. But when the
+modifier is a **hyper key that is also your keyboard shortcut prefix**, it is wrong.
+Karabiner presses button1 once the key has been held past a threshold, so any hyper
+chord (hold caps_lock, then press `s`) ends with a mouse-up and no drag — and the
+click is replayed onto whatever is under the pointer.
+
+Without this patch the only mitigation is a *long* hold threshold, which forces you
+to chord quickly and still delays the drag. With it, the threshold can be ~0: arming
+button1 during a chord becomes harmless, so you can hold hyper for as long as you
+like before pressing the next key, and dragging starts immediately.
+
+Nothing is lost, because hyper+click is not a gesture any application implements.
+
+### How
+
+A `no_replay_click` flag on `struct mouse_state`, guarding the replay.
+
+Note it is stored **inverted**. `g_mouse_state` is a global with no explicit
+initialiser, so it is zero-initialised; `no_replay_click = false` therefore means
+"replay", which is exactly the upstream behaviour. A positively-named flag would
+have defaulted to off and silently changed behaviour for anyone who never sets it.
+The config layer flips it back so the user-facing setting reads naturally
+(`mouse_replay_click on|off`, default `on`).
+
+### Related local configuration
+
+- `~/.yabairc` — `yabai -m config mouse_replay_click off`
+- `~/.config/karabiner/karabiner.json` — caps_lock's `to_if_held_down` threshold can
+  be lowered to near zero once this is in place

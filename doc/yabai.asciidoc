@@ -223,6 +223,13 @@ Global Settings
     which allows a hyper key to be used. The match is exact: the combination
     given here must be pressed, with no additional modifiers.
 
+*mouse_replay_click* ['<BOOL_SEL>']::
+    When a 'mouse_modifier' + click is consumed but no drag follows, replay the
+    click into the application underneath. Default 'on', matching the behaviour
+    when this setting did not exist. +
+    Set to 'off' when the modifier is a hyper key held for keyboard shortcuts,
+    so that holding it without moving the mouse does not produce a stray click.
+
 *mouse_action1* ['move|resize']::
     Action performed when pressing 'mouse_modifier' + 'button1'.
 

@@ -69,6 +69,11 @@ struct mouse_state
     enum mouse_mode action1;
     enum mouse_mode action2;
     volatile uint8_t modifier;
+    // LOCAL PATCH: when true, a modifier+click that never became a drag is
+    // NOT replayed into the application. Stored inverted so that the
+    // zero-initialised default (false) keeps upstream behaviour.
+    // See `mouse_replay_click` in message.c and PATCHES.md.
+    volatile bool no_replay_click;
     enum mouse_mode drop_action;
     enum mouse_mode current_action;
     CGPoint down_location;

@@ -47,6 +47,7 @@ extern bool g_verbose;
 #define COMMAND_CONFIG_SPLIT_TYPE            "split_type"
 #define COMMAND_CONFIG_AUTO_BALANCE          "auto_balance"
 #define COMMAND_CONFIG_MOUSE_MOD             "mouse_modifier"
+#define COMMAND_CONFIG_MOUSE_REPLAY_CLICK    "mouse_replay_click"
 #define COMMAND_CONFIG_MOUSE_ACTION1         "mouse_action1"
 #define COMMAND_CONFIG_MOUSE_ACTION2         "mouse_action2"
 #define COMMAND_CONFIG_MOUSE_DROP_ACTION     "mouse_drop_action"
@@ -1632,6 +1633,19 @@ static void handle_domain_config(FILE *rsp, struct token domain, char *message)
                 } else {
                     daemon_fail(rsp, "unknown value '%.*s' given to command '%.*s' for domain '%.*s'\n", value.length, value.text, command.length, command.text, domain.length, domain.text);
                 }
+            }
+        } else if (token_equals(command, COMMAND_CONFIG_MOUSE_REPLAY_CLICK)) {
+            // LOCAL PATCH: see PATCHES.md. Stored inverted internally so the
+            // zero-initialised default keeps upstream behaviour ("on").
+            struct token value = get_token(&message);
+            if (!token_is_valid(value)) {
+                fprintf(rsp, "%s\n", bool_str[!g_mouse_state.no_replay_click]);
+            } else if (token_equals(value, ARGUMENT_COMMON_VAL_OFF)) {
+                g_mouse_state.no_replay_click = true;
+            } else if (token_equals(value, ARGUMENT_COMMON_VAL_ON)) {
+                g_mouse_state.no_replay_click = false;
+            } else {
+                daemon_fail(rsp, "unknown value '%.*s' given to command '%.*s' for domain '%.*s'\n", value.length, value.text, command.length, command.text, domain.length, domain.text);
             }
         } else if (token_equals(command, COMMAND_CONFIG_MOUSE_ACTION1)) {
             struct token value = get_token(&message);
