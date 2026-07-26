@@ -90,6 +90,81 @@ static char *mouse_mod_str[] =
     [MOUSE_MOD_FN]    = "fn",
 };
 
+//
+// LOCAL PATCH: allow mouse_modifier to be a combination, e.g.
+//     yabai -m config mouse_modifier cmd+ctrl+alt+shift
+//
+// The flags are already a bitmask and mouse_handler() compares them with
+// exact equality, so a combination works unchanged there -- only the config
+// parser was restricted to a single value. This makes it possible to use a
+// hyper key (cmd+ctrl+alt+shift, as produced by Karabiner-Elements) as the
+// drag modifier.
+//
+// Note mouse_mod_str[] above is indexed BY FLAG VALUE and so cannot render a
+// combination (index 0x1E is an uninitialised slot); mouse_mod_to_string()
+// below replaces it for read-back.
+//
+
+static const struct { uint8_t flag; const char *name; int length; } mouse_mod_map[] =
+{
+    { MOUSE_MOD_NONE,  "none",  4 },
+    { MOUSE_MOD_ALT,   "alt",   3 },
+    { MOUSE_MOD_SHIFT, "shift", 5 },
+    { MOUSE_MOD_CMD,   "cmd",   3 },
+    { MOUSE_MOD_CTRL,  "ctrl",  4 },
+    { MOUSE_MOD_FN,    "fn",    2 },
+};
+
+#define MOUSE_MOD_MAP_COUNT (sizeof(mouse_mod_map) / sizeof(mouse_mod_map[0]))
+
+// Parse a '+'-separated modifier list. Returns 0 if any component is unknown
+// (0 is not a valid modifier -- MOUSE_MOD_NONE is 0x01 -- so it is safe as a
+// failure value). text is NOT null-terminated; length bounds it.
+static inline uint8_t mouse_mod_from_string(const char *text, int length)
+{
+    uint8_t result = 0;
+
+    for (int i = 0; i < length; ) {
+        int start = i;
+        while (i < length && text[i] != '+') ++i;
+
+        int      part_length = i - start;
+        const char *part     = text + start;
+        uint8_t  flag        = 0;
+
+        for (int j = 0; j < (int)MOUSE_MOD_MAP_COUNT; ++j) {
+            if (part_length == mouse_mod_map[j].length &&
+                memcmp(part, mouse_mod_map[j].name, part_length) == 0) {
+                flag = mouse_mod_map[j].flag;
+                break;
+            }
+        }
+
+        if (!flag) return 0;
+        result |= flag;
+
+        if (i < length && text[i] == '+') ++i;
+    }
+
+    return result;
+}
+
+// Render a (possibly combined) modifier back to "cmd+ctrl+alt+shift" form,
+// in the same order as mouse_mod_map.
+static inline void mouse_mod_to_string(uint8_t modifier, char *buffer, int size)
+{
+    int n = 0;
+    buffer[0] = '\0';
+
+    for (int i = 0; i < (int)MOUSE_MOD_MAP_COUNT; ++i) {
+        if (!(modifier & mouse_mod_map[i].flag)) continue;
+        n += snprintf(buffer + n, size - n, "%s%s", n ? "+" : "", mouse_mod_map[i].name);
+        if (n >= size) return;
+    }
+
+    if (n == 0) snprintf(buffer, size, "none");
+}
+
 static char *mouse_mode_str[] =
 {
     [MOUSE_MODE_NONE]   = "none",

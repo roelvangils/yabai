@@ -1618,19 +1618,20 @@ static void handle_domain_config(FILE *rsp, struct token domain, char *message)
         } else if (token_equals(command, COMMAND_CONFIG_MOUSE_MOD)) {
             struct token value = get_token(&message);
             if (!token_is_valid(value)) {
-                fprintf(rsp, "%s\n", mouse_mod_str[g_mouse_state.modifier]);
-            } else if (token_equals(value, ARGUMENT_CONFIG_MOUSE_MOD_ALT)) {
-                g_mouse_state.modifier = MOUSE_MOD_ALT;
-            } else if (token_equals(value, ARGUMENT_CONFIG_MOUSE_MOD_SHIFT)) {
-                g_mouse_state.modifier = MOUSE_MOD_SHIFT;
-            } else if (token_equals(value, ARGUMENT_CONFIG_MOUSE_MOD_CMD)) {
-                g_mouse_state.modifier = MOUSE_MOD_CMD;
-            } else if (token_equals(value, ARGUMENT_CONFIG_MOUSE_MOD_CTRL)) {
-                g_mouse_state.modifier = MOUSE_MOD_CTRL;
-            } else if (token_equals(value, ARGUMENT_CONFIG_MOUSE_MOD_FN)) {
-                g_mouse_state.modifier = MOUSE_MOD_FN;
+                // LOCAL PATCH: mouse_mod_str[] is indexed by flag value and
+                // cannot render a combination, so format from the bitmask.
+                char buffer[64];
+                mouse_mod_to_string(g_mouse_state.modifier, buffer, sizeof(buffer));
+                fprintf(rsp, "%s\n", buffer);
             } else {
-                daemon_fail(rsp, "unknown value '%.*s' given to command '%.*s' for domain '%.*s'\n", value.length, value.text, command.length, command.text, domain.length, domain.text);
+                // LOCAL PATCH: accept '+'-separated combinations, so a hyper
+                // key (cmd+ctrl+alt+shift) can be used as the drag modifier.
+                uint8_t modifier = mouse_mod_from_string(value.text, value.length);
+                if (modifier) {
+                    g_mouse_state.modifier = modifier;
+                } else {
+                    daemon_fail(rsp, "unknown value '%.*s' given to command '%.*s' for domain '%.*s'\n", value.length, value.text, command.length, command.text, domain.length, domain.text);
+                }
             }
         } else if (token_equals(command, COMMAND_CONFIG_MOUSE_ACTION1)) {
             struct token value = get_token(&message);

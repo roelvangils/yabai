@@ -218,7 +218,10 @@ Global Settings
     Specify the size distribution when a window is split.
 
 *mouse_modifier* ['cmd|alt|shift|ctrl|fn']::
-    Keyboard modifier used for moving and resizing windows.
+    Keyboard modifier used for moving and resizing windows. +
+    Several modifiers may be combined with '+', e.g. 'cmd+ctrl+alt+shift',
+    which allows a hyper key to be used. The match is exact: the combination
+    given here must be pressed, with no additional modifiers.
 
 *mouse_action1* ['move|resize']::
     Action performed when pressing 'mouse_modifier' + 'button1'.
