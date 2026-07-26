@@ -25,43 +25,50 @@
 
 ## Why this fork exists
 
-This is a personal fork. It exists for exactly one change: **`mouse_modifier` can be a
-combination of modifiers**, so a hyper key can be used to drag windows.
+This is a personal fork, carrying two small changes that together allow **moving and
+resizing windows by holding keys and moving the mouse, with no mouse button pressed**.
 
 ```bash
-yabai -m config mouse_modifier cmd+ctrl+alt+shift
+yabai -m config mouse_modifier     ctrl+alt   # patch 1: combinations allowed
+yabai -m config mouse_replay_click off        # patch 2: no replayed click
 ```
 
-Stock yabai accepts only a single modifier there, and rejects the line above.
+### The problem
 
-### The problem it solves
-
-I wanted to move windows by **holding a key and moving the mouse, without clicking**.
-yabai has no such mode: `mouse_action1`/`mouse_action2` are defined as
-"`mouse_modifier` + button1/button2", and its drag begins on `MOUSE_DOWN`.
+yabai has no buttonless drag mode: `mouse_action1`/`mouse_action2` are defined as
+"`mouse_modifier` + button1/button2", and a drag begins on `MOUSE_DOWN`.
 
 Synthesising the click from userspace does not work either. yabai taps the event stream
-at `kCGHIDEventTap` (`src/mouse_handler.c`), which sits upstream of where applications
-are able to inject events — so a click posted by, say, Hammerspoon is never seen by
-yabai. It fails silently: no drag, no error.
+at `kCGHIDEventTap` (`src/mouse_handler.c`), upstream of where applications are able to
+inject events — so a click posted by, say, Hammerspoon is never seen. It fails silently:
+no drag, no error.
 
 What *does* reach that far upstream is a virtual HID device, which is what
-[Karabiner-Elements](https://karabiner-elements.pqrs.org) creates. Karabiner can hold
-`button1` while a key is held down, and yabai sees an ordinary drag.
+[Karabiner-Elements](https://karabiner-elements.pqrs.org) creates. It can hold a mouse
+button down while a key combination is held, and yabai sees an ordinary drag.
 
-The catch: my trigger is caps_lock mapped to hyper, so the event carries
-`cmd+ctrl+alt+shift` — four modifiers. `mouse_handler()` compares modifiers with **exact
-equality**, and the config parser could only ever store one flag. A hyper key could
-therefore never match. Hence this fork.
+Two things then stood in the way:
+
+1. **The combination carries several modifiers.** `mouse_handler()` compares them with
+   **exact equality**, and the config parser could only ever store a single flag, so
+   `ctrl+alt` could never match. → **patch 1**
+2. **A consumed click is replayed when no drag follows**, so merely pressing the trigger
+   without moving the mouse fired a click wherever the pointer sat. Avoiding that meant
+   a long hold threshold before the drag armed — delaying every drag. → **patch 2**
+
+With both, the trigger needs no threshold: pressing it is inert, and dragging starts
+immediately.
 
 ### What changed
 
-The flags were already a bitmask and the comparison already worked for combined values;
-only the config parser was restrictive. Matching remains exact rather than a subset test,
-so single-modifier setups behave exactly as before.
+The flags were already a bitmask and the comparison already handled combined values;
+only the config parser was restrictive. Matching stays exact rather than becoming a
+subset test, and `mouse_replay_click` defaults to `on`, so **nothing changes for anyone
+who does not opt in**.
 
-See **[PATCHES.md](PATCHES.md)** for the full rationale, the implementation, and the
-`mouse_mod_str[]` trap that made the read-back path need changing too.
+See **[PATCHES.md](PATCHES.md)** for the full rationale, the implementation, the
+matching Karabiner rules, and the `mouse_mod_str[]` trap that made the read-back path
+need changing too.
 
 ### Lineage
 

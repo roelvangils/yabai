@@ -26,15 +26,23 @@ yabai -m config mouse_modifier cmd+ctrl+alt+shift
 
 ### Why
 
-To drag windows with a **hyper key**. Karabiner-Elements maps caps_lock to
-`cmd+ctrl+alt+shift`; holding it and pressing mouse button1 produces those four
-flags at once. Stock yabai can only match a single modifier, so a hyper key could
-never trigger a drag.
+To move and resize windows by **holding keys and moving the mouse, with no click**.
 
-This matters because yabai taps the event stream at `kCGHIDEventTap`
-(`src/mouse_handler.c`), upstream of where applications can inject events. That
-makes Karabiner's virtual HID device the only practical way to synthesise the
-click, and Karabiner's natural output for caps_lock is the full hyper combination.
+Karabiner-Elements presses a mouse button while a key combination is held, and yabai
+treats that as an ordinary drag. But the combination naturally carries more than one
+modifier — here `ctrl+alt` — and stock yabai can only match exactly one, so the
+click was never claimed and fell through to the application as a real click-drag.
+
+Karabiner specifically (rather than a userspace tool) because yabai taps the event
+stream at `kCGHIDEventTap` (`src/mouse_handler.c`), upstream of where applications
+can inject events. A click posted by, say, Hammerspoon is simply never seen: no
+drag, no error. Only a virtual HID device reaches that far upstream.
+
+> **Tried and abandoned:** driving this from a hyper key (caps_lock →
+> `cmd+ctrl+alt+shift`). Karabiner's `to_if_held_down` disturbs the modifiers held
+> by that same manipulator's `to`, so `hyper`+`s` arrived as a bare `s`. Putting the
+> drag on a key that is *not* itself a modifier remap avoids this entirely. The
+> patch is still required, because `ctrl+alt` is two modifiers.
 
 ### How
 
@@ -81,11 +89,36 @@ the exact combination drags. Nothing about single-modifier configurations change
 
 ### Related local configuration
 
-Not part of this repo, but this patch is useless without them:
+Not part of this repo, but this patch is useless without it.
 
-- `~/.config/karabiner/karabiner.json` — caps_lock sends hyper on press (`to`),
-  and presses `button1` when held (`to_if_held_down`)
-- `~/.yabairc` — `yabai -m config mouse_modifier cmd+ctrl+alt+shift`
+`~/.yabairc`:
+
+```bash
+yabai -m config mouse_modifier     ctrl+alt
+yabai -m config mouse_replay_click off        # see patch 2
+```
+
+`~/.config/karabiner/karabiner.json` — three rules, all pressing a mouse button
+while keys are held. yabai picks the action from the **button**, not the modifier
+(`mouse_action1` = button1 = move, `mouse_action2` = button2 = resize):
+
+| Keys | Emits | Result |
+| :--- | :--- | :--- |
+| left-ctrl + left-option | `button1` + `ctrl+alt` | move |
+| left-ctrl + left-option + left-command | `button2` + `ctrl+alt` | resize |
+| right-command | `button1` + `ctrl+alt` | move |
+
+Two details that are easy to get wrong:
+
+- The **three-key rule must be ordered before the two-key rule**, since Karabiner
+  takes the first match — otherwise ctrl+option wins and you get a move.
+- Command is **consumed but not asserted** on the resize event. Adding it would
+  make the flags `ctrl+alt+cmd`, which fails the exact-equality match and lets a
+  real right-click through.
+
+`simultaneous` rules always defer the first key of the set, so
+`basic.simultaneous_threshold_milliseconds` is lowered to 60 (default 1000).
+Raising it makes chords easier to hit and plain Option/Command shortcuts laggier.
 
 ### Known rough edge
 
@@ -151,5 +184,8 @@ The config layer flips it back so the user-facing setting reads naturally
 ### Related local configuration
 
 - `~/.yabairc` — `yabai -m config mouse_replay_click off`
-- `~/.config/karabiner/karabiner.json` — caps_lock's `to_if_held_down` threshold can
-  be lowered to near zero once this is in place
+- `~/.config/karabiner/karabiner.json` — with the replay gone, a trigger no longer
+  needs a hold threshold at all. right-command uses a plain `to`, so button1 goes
+  down on key-down and dragging starts instantly; pressing it without moving the
+  mouse now does nothing rather than clicking. That is only safe because of this
+  patch.
