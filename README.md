@@ -23,6 +23,55 @@
   </a>
 </p>
 
+## Why this fork exists
+
+This is a personal fork. It exists for exactly one change: **`mouse_modifier` can be a
+combination of modifiers**, so a hyper key can be used to drag windows.
+
+```bash
+yabai -m config mouse_modifier cmd+ctrl+alt+shift
+```
+
+Stock yabai accepts only a single modifier there, and rejects the line above.
+
+### The problem it solves
+
+I wanted to move windows by **holding a key and moving the mouse, without clicking**.
+yabai has no such mode: `mouse_action1`/`mouse_action2` are defined as
+"`mouse_modifier` + button1/button2", and its drag begins on `MOUSE_DOWN`.
+
+Synthesising the click from userspace does not work either. yabai taps the event stream
+at `kCGHIDEventTap` (`src/mouse_handler.c`), which sits upstream of where applications
+are able to inject events — so a click posted by, say, Hammerspoon is never seen by
+yabai. It fails silently: no drag, no error.
+
+What *does* reach that far upstream is a virtual HID device, which is what
+[Karabiner-Elements](https://karabiner-elements.pqrs.org) creates. Karabiner can hold
+`button1` while a key is held down, and yabai sees an ordinary drag.
+
+The catch: my trigger is caps_lock mapped to hyper, so the event carries
+`cmd+ctrl+alt+shift` — four modifiers. `mouse_handler()` compares modifiers with **exact
+equality**, and the config parser could only ever store one flag. A hyper key could
+therefore never match. Hence this fork.
+
+### What changed
+
+The flags were already a bitmask and the comparison already worked for combined values;
+only the config parser was restrictive. Matching remains exact rather than a subset test,
+so single-modifier setups behave exactly as before.
+
+See **[PATCHES.md](PATCHES.md)** for the full rationale, the implementation, and the
+`mouse_mod_str[]` trap that made the read-back path need changing too.
+
+### Lineage
+
+[asmvik/yabai](https://github.com/asmvik/yabai) → [AhsanFazal/yabai](https://github.com/AhsanFazal/yabai)
+(macOS 27 "Golden Gate" scripting-addition support) → this fork.
+
+Everything below is the upstream README, unchanged.
+
+---
+
 ## About
 
 <img align="right" width="40%" src="assets/screenshot.png" alt="Screenshot">
